@@ -4,30 +4,6 @@ using LinearAlgebra: Givens, Rotation, givens
 
 import Base: \
 
-# Hessenberg Matrix
-struct HessenbergMatrix{T,S<:StridedMatrix} <: AbstractMatrix{T}
-    data::S
-end
-
-Base.copy(H::HessenbergMatrix{T,S}) where {T,S} = HessenbergMatrix{T,S}(copy(H.data))
-
-Base.getindex(H::HessenbergMatrix{T,S}, i::Integer, j::Integer) where {T,S} =
-    i > j + 1 ? zero(T) : H.data[i, j]
-
-Base.size(H::HessenbergMatrix) = size(H.data)
-Base.size(H::HessenbergMatrix, i::Integer) = size(H.data, i)
-
-function LinearAlgebra.ldiv!(H::HessenbergMatrix, B::AbstractVecOrMat)
-    n = size(H, 1)
-    Hd = H.data
-    for i = 1:n-1
-        G, _ = givens(Hd, i, i + 1, i)
-        lmul!(G, view(Hd, 1:n, i:n))
-        lmul!(G, B)
-    end
-    ldiv!(UpperTriangular(Hd), B)
-end
-(\)(H::HessenbergMatrix, B::AbstractVecOrMat) = ldiv!(copy(H), copy(B))
 
 # Hessenberg factorization
 struct HessenbergFactorization{T,S<:StridedMatrix,U} <: Factorization{T}
@@ -57,7 +33,7 @@ Base.size(H::HessenbergFactorization, args...) = size(H.data, args...)
 
 function Base.getproperty(F::HessenbergFactorization, s::Symbol)
     if s === :H
-        return HessenbergMatrix{eltype(F.data),typeof(F.data)}(F.data)
+        return UpperHessenberg{eltype(F.data),typeof(F.data)}(F.data)
     else
         return getfield(F, s)
     end
@@ -271,7 +247,6 @@ function doubleShiftQR!(
 end
 
 _eigvals!(A::StridedMatrix; kwargs...) = _eigvals!(_schur!(A; kwargs...))
-_eigvals!(H::HessenbergMatrix; kwargs...) = _eigvals!(_schur!(H; kwargs...))
 _eigvals!(H::HessenbergFactorization; kwargs...) = _eigvals!(_schur!(H; kwargs...))
 
 function LinearAlgebra.eigvals!(
@@ -285,12 +260,6 @@ function LinearAlgebra.eigvals!(
     end
     LinearAlgebra.sorteig!(_eigvals!(A; kwargs...), sortby)
 end
-
-LinearAlgebra.eigvals!(
-    H::HessenbergMatrix;
-    sortby::Union{Function,Nothing} = LinearAlgebra.eigsortby,
-    kwargs...,
-) = LinearAlgebra.sorteig!(_eigvals!(H; kwargs...), sortby)
 
 LinearAlgebra.eigvals!(
     H::HessenbergFactorization;
